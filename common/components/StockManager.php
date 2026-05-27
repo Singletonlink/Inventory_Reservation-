@@ -20,14 +20,7 @@ final class StockManager extends Component
      */
     private const RESERVATION_TTL = 900;
 
-    /**
-     * Атомарное резервирование товара
-     *
-     * @param string $sku Артикул товара
-     * @param int $quantity Сколько хотим зарезервировать
-     * @param string $orderId ID заказа в системе
-     * @return bool Успешно ли создался резерв
-     */
+
     public function reserveStock(string $sku, int $quantity, string $orderId): bool
     {
         /** @var \yii\redis\Connection $redis */
@@ -46,8 +39,7 @@ final class StockManager extends Component
             $redis->set($redisStockKey, $product->quantity);
         }
 
-        // --- КРИТИЧЕСКАЯ СЕКЦИЯ ДЛЯ HIGHLOAD (Защита от Race Condition) ---
-        // Используем команду WATCH для отслеживания изменений ключа остатков
+        
         $redis->watch($redisStockKey);
         
         $currentStock = (int)$redis->get($redisStockKey);
@@ -57,13 +49,12 @@ final class StockManager extends Component
             return false; // Товара недостаточно на складе!
         }
 
-        // Начинаем транзакцию Redis (атомарный блок)
         $redis->multi();
         
-        // Уменьшаем доступный остаток в оперативной памяти
+        
         $redis->decrby($redisStockKey, $quantity);
         
-        // Фиксируем временный резерв под заказ с TTL 15 минут
+      
         $redis->setex($redisReserveKey, self::RESERVATION_TTL, $quantity);
         
         // Выполняем транзакцию. Если другой параллельный запрос успел изменить остаток,
@@ -71,7 +62,7 @@ final class StockManager extends Component
         $result = $redis->exec();
 
         if ($result === false || empty($result)) {
-            return false; // Транзакция сорвалась, пробуем снова или возвращаем ошибку
+            return false; 
         }
 
         return true;
